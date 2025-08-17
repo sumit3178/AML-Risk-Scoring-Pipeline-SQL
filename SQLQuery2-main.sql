@@ -1,13 +1,13 @@
--- Step 1: Backup Original Table with New Name
+-- Backup Original Table with New Name
 SELECT * 
 INTO dbo.SAML_Cleaned
 FROM dbo.[SAML-D];
 
--- Step 2: Drop Unused Columns
+--  Drop Unused Columns
 ALTER TABLE dbo.SAML_Cleaned
 DROP COLUMN Is_laundering, Laundering_type;
 
--- Step 3: Create Risk Scoring View (No Currency Tier Logic)
+-- Create Risk Scoring View (No Currency Tier Logic)
 CREATE OR ALTER VIEW vw_RiskScore_Evaluated AS
 SELECT 
     t.Time,
@@ -21,7 +21,7 @@ SELECT
     t.Receiver_bank_location,
     t.Payment_type,
 
-    -- Risk scoring logic (no trailing comma above)
+    -- Risk scoring logic 
     (
         CASE WHEN t.Amount > 10000 THEN 2 ELSE 0 END +                          -- High-value transaction
         CASE WHEN t.Payment_type = 'Cross-border' THEN 2 ELSE 0 END +          -- Cross-border payment
@@ -32,7 +32,7 @@ SELECT
 FROM dbo.SAML_Cleaned t;
 GO
 
--- Step 4: Flag Suspicious Transactions
+-- Flag Suspicious Transactions
 CREATE OR ALTER VIEW vw_SuspiciousFlags AS
 SELECT *,
     CASE 
@@ -42,7 +42,7 @@ SELECT *,
 FROM vw_RiskScore_Evaluated;
 GO
 
--- Step 5: Sender Account Summary
+--  Sender Account Summary
 CREATE OR ALTER VIEW vw_SenderStats AS
 SELECT 
     Sender_account,
@@ -55,7 +55,7 @@ FROM dbo.SAML_Cleaned
 GROUP BY Sender_account;
 GO
 
--- Step 6: Export Flagged Transactions
+--  Export Flagged Transactions
 SELECT * 
 INTO dbo.AML_Export_Flag
 FROM vw_SuspiciousFlags
