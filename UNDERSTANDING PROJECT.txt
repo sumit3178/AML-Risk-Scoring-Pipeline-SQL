@@ -1,0 +1,92 @@
+
+
+ Backup Original Table with New Name
+```sql
+SELECT * 
+INTO dbo.SAML_Cleaned
+FROM dbo.[SAML-D];
+```
+Creates a working copy of your raw transaction data.
+Keeps the original table untouched while allowing you to clean, transform, and analyze data safely.
+
+
+
+Drop Unused Columns
+```sql
+ALTER TABLE dbo.SAML_Cleaned
+DROP COLUMN Is_laundering, Laundering_type;
+```
+ Removes columns that are either deprecated or manually labeled.
+ Ensures your pipeline is driven by automated logic, not pre-tagged labels.
+
+---
+
+ Create Risk Scoring View (No Currency Tier Logic)
+```sql
+CREATE OR ALTER VIEW vw_RiskScore_Evaluated AS
+SELECT 
+    ...
+    (
+        CASE WHEN t.Amount > 10000 THEN 2 ELSE 0 END +
+        CASE WHEN t.Payment_type = 'Cross-border' THEN 2 ELSE 0 END +
+        CASE WHEN t.Payment_currency != t.Received_currency THEN 1 ELSE 0 END +
+        CASE WHEN t.Sender_bank_location != t.Receiver_bank_location THEN 1 ELSE 0 END
+    ) AS risk_score
+FROM dbo.SAML_Cleaned t;
+```
+Purpose: Assigns a numeric risk score to each transaction based on key attributes.
+Why: Enables automated detection of potentially suspicious patterns like high-value transfers, cross-border activity, currency mismatches, and geographic separation.
+
+---
+
+Flag Suspicious Transactions
+```sql
+CREATE OR ALTER VIEW vw_SuspiciousFlags AS
+SELECT *,
+    CASE 
+        WHEN risk_score >= 5 THEN 1
+        ELSE 0
+    END AS is_suspicious
+FROM vw_RiskScore_Evaluated;
+```
+Purpose: Flags transactions as suspicious if their risk score crosses a defined threshold.
+Why: Converts raw scores into binary flags for downstream filtering, reporting, or escalation.
+
+
+ Sender Account Summary
+```sql
+CREATE OR ALTER VIEW vw_SenderStats AS
+SELECT 
+    Sender_account,
+    COUNT(*) AS total_transactions,
+    SUM(Amount) AS total_sent_amount,
+    AVG(Amount) AS avg_transaction_amount,
+    MAX(Amount) AS max_transaction_amount,
+    MIN(Amount) AS min_transaction_amount
+FROM dbo.SAML_Cleaned
+GROUP BY Sender_account;
+```
+Purpose: Aggregates transaction metrics per sender.
+Why: Helps identify outliers, frequent senders, or accounts with abnormal transaction behavior.
+
+
+
+```sql
+SELECT * 
+INTO dbo.AML_Export_Flag
+FROM vw_SuspiciousFlags
+WHERE is_suspicious = 1;
+```
+Purpose: Creates a new table containing only flagged transactions.
+Why: Isolates high-risk data for audit, investigation, or dashboarding.
+
+
+```sql
+SELECT * 
+FROM dbo.AML_Export_Flag
+ORDER BY Sender_account, Receiver_account;
+```
+Purpose: Displays the exported suspicious transactions in a readable order.
+Why: Makes it easier to trace patterns between senders and receivers.
+
+
