@@ -116,10 +116,3 @@ It processes raw transaction data to detect suspicious behavior by scoring trans
 * Access to transaction dataset (`SAML-D`)
 
 ---
-
-##Future Improvements
-
-* Add `risk_category` column (e.g., Low/Medium/High)
-* Include time-based or regional pattern detection
-* Integrate with BI dashboards (e.g., Power BI, Tableau)
-
